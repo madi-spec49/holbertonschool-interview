@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """
 Module that implements Pascal's triangle.
 """
@@ -25,10 +25,10 @@ def pascal_triangle(n):
     triangle = []
 
     for i in range(n):
-        # Create a new row with i+1 elements, all initialized to 1
+
         row = [1] * (i + 1)
 
-        # Calculate values for the middle elements
+
         for j in range(1, i):
             row[j] = triangle[i - 1][j - 1] + triangle[i - 1][j]
 
