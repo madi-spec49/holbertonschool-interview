@@ -1,56 +1,80 @@
 #!/usr/bin/python3
-"""Log parsing script that reads stdin and computes metrics."""
+"""
+Script de parsing de log en temps réel via stdin.
+Calcule la taille totale des fichiers et compte les codes de statut HTTP.
+"""
+import re
 import sys
 
 
-def print_stats(total_size, status_counts):
-    """Print current statistics."""
+def print_statistics(total_size, status_codes):
+    """
+    Affiche les statistiques accumulées jusqu'à présent.
+    """
     print("File size: {}".format(total_size))
-    for code in sorted(status_counts.keys()):
-        if status_counts[code] > 0:
-            print("{}: {}".format(code, status_counts[code]))
+    for code in sorted(status_codes.keys()):
+        if status_codes[code] > 0:
+            print("{}: {}".format(code, status_codes[code]))
 
 
 def main():
-    """Main function to parse logs from stdin."""
     total_size = 0
     line_count = 0
-    valid_codes = {"200", "301", "400", "401", "403", "404", "405", "500"}
-    status_counts = {code: 0 for code in valid_codes}
+
+    # Dictionnaire pour suivre uniquement les codes de statut autorisés
+    status_codes = {
+        "200": 0,
+        "301": 0,
+        "400": 0,
+        "401": 0,
+        "403": 0,
+        "404": 0,
+        "405": 0,
+        "500": 0,
+    }
+
+    # Expression régulière pour valider strictement le format d'entrée demandé
+    # Format attendu : <IP> - [<date>] "GET /projects/260 HTTP/1.1" <status> <size>
+    log_pattern = re.compile(
+        r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} - "  # Adresse IP
+        r"\[.*?\] "                                 # Date entre crochets
+        r"\"GET /projects/260 HTTP/1.1\" "          # Requête exacte
+        r"(\d{3}) "                                 # Groupe 1 : Code statut (3 chiffres)
+        r"(\d+)$"                                   # Groupe 2 : Taille du fichier (entier)
+    )
 
     try:
         for line in sys.stdin:
-            parts = line.split()
+            line = line.strip()
+            match = log_pattern.match(line)
 
-            # Validate format: at least enough parts and check structure
-            if len(parts) < 7:
+            # Si la ligne ne correspond pas au format requis, elle est ignorée
+            if not match:
                 continue
 
-            try:
-                # Check status code and file size (last two fields)
-                status_code = parts[-2]
-                file_size = int(parts[-3] if len(parts) > 7 else parts[-1])
-                file_size = int(parts[-1])
+            # Extraction des données validées
+            status_code = match.group(1)
+            file_size = int(match.group(2))
 
-                # Validate the line format more strictly
-                if parts[1] != "-" or not parts[3].startswith('"GET'):
-                    continue
+            # Accumulation de la taille du fichier
+            total_size += file_size
 
-                total_size += file_size
+            # Incrémentation du code statut s'il fait partie de la liste attendue
+            if status_code in status_codes:
+                status_codes[status_code] += 1
 
-                if status_code in valid_codes:
-                    status_counts[status_code] += 1
+            line_count += 1
 
-                line_count += 1
+            # Toutes les 10 lignes valides, on affiche les statistiques
+            if line_count % 10 == 0:
+                print_statistics(total_size, status_codes)
 
-                if line_count % 10 == 0:
-                    print_stats(total_size, status_counts)
-
-            except (ValueError, IndexError):
-                continue
+        # Si l'entrée se termine proprement sans atteindre un multiple de 10
+        print_statistics(total_size, status_codes)
 
     except KeyboardInterrupt:
-        print_stats(total_size, status_counts)
+        # Interception du CTRL+C : affichage des stats avant de relancer l'exception
+        print_statistics(total_size, status_codes)
         raise
 
 
